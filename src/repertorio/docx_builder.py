@@ -11,14 +11,89 @@ from repertorio.transposer import transpose_key, transpose_lines
 
 
 FONT_NAME = "Consolas"
-CHORD_COLOR = RGBColor(230, 81, 0)  # Vibrant orange
-TEXT_COLOR = RGBColor(40, 40, 40)    # Soft dark gray
-HEADER_COLOR = RGBColor(20, 20, 20)  # Dark title color
-META_COLOR = RGBColor(100, 100, 100) # Muted gray for metadata
+DEFAULT_COLUMNS = 2
+DEFAULT_CHORD_COLOR_HEX = "#E65100"
+DEFAULT_CHORD_COLOR = RGBColor(230, 81, 0)  # Vibrant orange
+CHORD_COLOR = DEFAULT_CHORD_COLOR           # Backward compatibility
+TEXT_COLOR = RGBColor(40, 40, 40)           # Soft dark gray
+HEADER_COLOR = RGBColor(20, 20, 20)         # Dark title color
+META_COLOR = RGBColor(100, 100, 100)        # Muted gray for metadata
+
+LAYOUT_PRESETS: Dict[int, Dict[str, Any]] = {
+    1: {
+        "columns": 1,
+        "font_size": Pt(10.5),
+        "line_spacing": Pt(13.0),
+    },
+    2: {
+        "columns": 2,
+        "font_size": Pt(8.5),
+        "line_spacing": Pt(10.5),
+    },
+}
+
+
+def parse_chord_color(color: Any) -> RGBColor:
+    """Safely parse a color representation into an RGBColor instance.
+    
+    Supports:
+      - None (defaults to DEFAULT_CHORD_COLOR)
+      - RGBColor instance
+      - Tuple/list of (r, g, b) integers in range 0-255
+      - Hex string with or without '#' (3 or 6 hex digits)
+    Falls back gracefully to DEFAULT_CHORD_COLOR on invalid input.
+    """
+    if color is None:
+        return DEFAULT_CHORD_COLOR
+
+    if isinstance(color, RGBColor):
+        return color
+
+    if isinstance(color, (tuple, list)):
+        try:
+            if len(color) == 3:
+                r, g, b = int(color[0]), int(color[1]), int(color[2])
+                if 0 <= r <= 255 and 0 <= g <= 255 and 0 <= b <= 255:
+                    return RGBColor(r, g, b)
+        except (ValueError, TypeError):
+            pass
+        return DEFAULT_CHORD_COLOR
+
+    if isinstance(color, str):
+        cleaned = color.strip()
+        if cleaned.startswith("#"):
+            cleaned = cleaned[1:]
+
+        try:
+            if len(cleaned) == 3:
+                cleaned = "".join(c * 2 for c in cleaned)
+            if len(cleaned) == 6:
+                r = int(cleaned[0:2], 16)
+                g = int(cleaned[2:4], 16)
+                b = int(cleaned[4:6], 16)
+                return RGBColor(r, g, b)
+        except ValueError:
+            pass
+        return DEFAULT_CHORD_COLOR
+
+    return DEFAULT_CHORD_COLOR
+
+
+def get_layout_preset(columns: int = 2) -> Dict[str, Any]:
+    """Retrieve typography and layout preset for the requested column count.
+    
+    Defaults to 2-column preset on invalid or unsupported values.
+    """
+    try:
+        col_int = int(columns)
+    except (ValueError, TypeError):
+        col_int = DEFAULT_COLUMNS
+
+    return LAYOUT_PRESETS.get(col_int, LAYOUT_PRESETS[DEFAULT_COLUMNS])
 
 
 def _set_section_columns_and_margins(section, num_cols: int = 2, space_pts: int = 720) -> None:
-    """Set 2-column layout and tight 0.5 inch margins on a Word section."""
+    """Set column layout and tight 0.5 inch margins on a Word section."""
     section.top_margin = Inches(0.5)
     section.bottom_margin = Inches(0.5)
     section.left_margin = Inches(0.5)
@@ -36,8 +111,16 @@ def _set_section_columns_and_margins(section, num_cols: int = 2, space_pts: int 
         sectPr.append(cols_elem)
 
 
-def build_document(songs: List[Dict[str, Any]], output_path: Path | str) -> None:
-    """Build a professional 2-column Word document containing the provided songs."""
+def build_document(
+    songs: List[Dict[str, Any]],
+    output_path: Path | str,
+    columns: int = 2,
+    chord_color: Any = None,
+) -> None:
+    """Build a professional Word document containing the provided songs formatted with layout presets."""
+    preset = get_layout_preset(columns)
+    resolved_chord_color = parse_chord_color(chord_color)
+
     doc = docx.Document()
 
     for i, song in enumerate(songs):
@@ -47,7 +130,7 @@ def build_document(songs: List[Dict[str, Any]], output_path: Path | str) -> None
         else:
             section = doc.add_section(WD_SECTION.NEW_PAGE)
 
-        _set_section_columns_and_margins(section, num_cols=2, space_pts=720)
+        _set_section_columns_and_margins(section, num_cols=preset["columns"], space_pts=720)
 
         # Song Title & Artist header
         p_title = doc.add_paragraph()
@@ -84,7 +167,7 @@ def build_document(songs: List[Dict[str, Any]], output_path: Path | str) -> None
             r_meta = p_meta.add_run(" | ".join(meta_items))
             r_meta.italic = True
             r_meta.font.name = FONT_NAME
-            r_meta.font.size = Pt(8.5)
+            r_meta.font.size = preset["font_size"]
             r_meta.font.color.rgb = META_COLOR
 
         # Render song lines (chords & lyrics)
@@ -94,7 +177,7 @@ def build_document(songs: List[Dict[str, Any]], output_path: Path | str) -> None
             line_text = "".join(t["text"] for t in line_tokens)
 
             p_line = doc.add_paragraph()
-            p_line.paragraph_format.line_spacing = Pt(10.5)
+            p_line.paragraph_format.line_spacing = preset["line_spacing"]
 
             if not line_text.strip():
                 # Empty line separating stanzas
@@ -118,11 +201,11 @@ def build_document(songs: List[Dict[str, Any]], output_path: Path | str) -> None
                     continue
                 run = p_line.add_run(text)
                 run.font.name = FONT_NAME
-                run.font.size = Pt(8.5)
+                run.font.size = preset["font_size"]
 
                 if token.get("is_chord"):
                     run.bold = True
-                    run.font.color.rgb = CHORD_COLOR
+                    run.font.color.rgb = resolved_chord_color
                 elif is_section_header:
                     run.bold = True
                     run.font.color.rgb = META_COLOR
@@ -133,3 +216,4 @@ def build_document(songs: List[Dict[str, Any]], output_path: Path | str) -> None
     out = Path(output_path)
     out.parent.mkdir(parents=True, exist_ok=True)
     doc.save(str(out))
+

@@ -17,7 +17,7 @@ The semitone offset applied to a Song's chords and key when compiling the Repert
 _Avoid_: cambio de tono, pitch shift
 
 **Repertoire**:
-The final compiled Word (.docx) document containing formatted two-column chord sheets and page breaks for each song in the setlist.
+The final compiled Word (.docx) document containing formatted single or two-column chord sheets, adaptive typography presets, and page breaks for each song in the setlist.
 _Avoid_: cancionero, book, output file
 
 **Song Override**:

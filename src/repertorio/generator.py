@@ -12,6 +12,8 @@ def generate_from_songs(
     output_docx: Path | str,
     cache_dir: Path | str = ".cache_cifras",
     progress_callback: Optional[Callable[[int, int, str], None]] = None,
+    columns: int = 2,
+    chord_color: Any = None,
 ) -> Dict[str, int]:
     """Generate Word repertoire docx directly from a list of curated song dicts."""
     cache = CacheManager(cache_dir)
@@ -88,7 +90,7 @@ def generate_from_songs(
         progress_callback(total, total, f"Compilando documento Word: {output_docx}...")
 
     if resolved_songs:
-        build_document(resolved_songs, output_docx)
+        build_document(resolved_songs, output_docx, columns=columns, chord_color=chord_color)
 
     return {
         "total": total,
@@ -117,6 +119,8 @@ def generate_repertoire(
     songs_file: Path | str,
     output_docx: Path | str,
     cache_dir: Path | str = ".cache_cifras",
+    columns: int = 2,
+    chord_color: Any = None,
 ) -> Dict[str, int]:
     """Orchestrate reading queries, resolving, caching, and generating the repertoire docx."""
     queries = read_song_queries(songs_file)
@@ -177,7 +181,7 @@ def generate_repertoire(
     # 5. Build Word document
     if resolved_songs:
         print(f"[*] Generando documento Word en: {output_docx}...")
-        build_document(resolved_songs, output_docx)
+        build_document(resolved_songs, output_docx, columns=columns, chord_color=chord_color)
         print(f"[+] Documento generado exitosamente con {len(resolved_songs)} canciones.")
     else:
         print("[WARN] No se resolvio ninguna cancion. No se genero el archivo Word.")

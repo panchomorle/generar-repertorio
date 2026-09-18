@@ -27,6 +27,18 @@ def main() -> None:
         default=".cache_cifras",
         help="Directorio para la cache local de canciones (default: .cache_cifras)",
     )
+    parser.add_argument(
+        "--columns",
+        choices=[1, 2],
+        type=int,
+        default=2,
+        help="Numero de columnas del cancionero (1 o 2, default: 2)",
+    )
+    parser.add_argument(
+        "--chord-color",
+        default="#E65100",
+        help="Color hexadecimal de los acordes (default: #E65100)",
+    )
 
     args = parser.parse_args()
 
@@ -43,7 +55,13 @@ def main() -> None:
         print(f"[+] Archivo '{input_file}' creado con ejemplos. Ejecuta el script de nuevo o editalo.")
         sys.exit(0)
 
-    stats = generate_repertoire(input_file, args.output, cache_dir=args.cache_dir)
+    stats = generate_repertoire(
+        input_file,
+        args.output,
+        cache_dir=args.cache_dir,
+        columns=args.columns,
+        chord_color=args.chord_color,
+    )
     print(f"\nResumen: {stats['total']} total | {stats['downloaded']} descargadas | {stats['cached']} en cache | {stats['failed']} fallidas.")
 
 
