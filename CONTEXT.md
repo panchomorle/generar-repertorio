@@ -19,3 +19,7 @@ _Avoid_: cambio de tono, pitch shift
 **Repertoire**:
 The final compiled Word (.docx) document containing formatted two-column chord sheets and page breaks for each song in the setlist.
 _Avoid_: cancionero, book, output file
+
+**Song Override**:
+A Setlist-level customized chord sheet and metadata that overrides the cached CifraClub content for a Song without mutating the underlying cache.
+_Avoid_: custom song, local patch, edited track
