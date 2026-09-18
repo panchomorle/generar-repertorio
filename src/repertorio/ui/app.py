@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 import customtkinter as ctk
-from tkinter import filedialog, messagebox
+from tkinter import filedialog, messagebox, colorchooser
 
 from repertorio.search import search_songs
 from repertorio.setlist import Setlist
@@ -14,6 +14,7 @@ from repertorio.cache import CacheManager
 from repertorio.scraper import fetch_and_parse_song
 from repertorio.transposer import transpose_key
 from repertorio.ui.editor import SongEditModal
+from repertorio.settings import SettingsManager
 
 
 ctk.set_appearance_mode("System")
@@ -23,13 +24,14 @@ ctk.set_default_color_theme("blue")
 class RepertoireApp(ctk.CTk):
     """Main desktop window for the Repertoire Generator."""
 
-    def __init__(self) -> None:
+    def __init__(self, settings: Optional[SettingsManager] = None) -> None:
         super().__init__()
 
         self.title("Generador de Repertorio - CifraClub")
         self.geometry("900x720")
         self.minsize(800, 600)
 
+        self.settings = settings or SettingsManager()
         self.setlist = Setlist()
         self.cache = CacheManager()
         self.search_results: List[Dict[str, Any]] = []
@@ -161,14 +163,58 @@ class RepertoireApp(ctk.CTk):
         )
         browse_btn.grid(row=0, column=2, padx=(0, 15), pady=(12, 5))
 
+        # Format options row (Columns layout & Chord color)
+        format_row = ctk.CTkFrame(bottom_frame, fg_color="transparent")
+        format_row.grid(row=1, column=0, columnspan=3, padx=15, pady=(2, 6), sticky="ew")
+
+        layout_lbl = ctk.CTkLabel(format_row, text="Columnas:", font=ctk.CTkFont(size=12, weight="bold"))
+        layout_lbl.pack(side="left", padx=(0, 8))
+
+        self.layout_segmented_btn = ctk.CTkSegmentedButton(
+            format_row,
+            values=["1 Columna", "2 Columnas"],
+            command=self._on_layout_changed,
+            height=28,
+            width=180,
+        )
+        initial_layout = "1 Columna" if self.settings.columns == 1 else "2 Columnas"
+        self.layout_segmented_btn.set(initial_layout)
+        self.layout_segmented_btn.pack(side="left", padx=(0, 12))
+
+        self.layout_hint_lbl = ctk.CTkLabel(
+            format_row,
+            text="1 columna se adapta mejor a pantallas · 2 columnas es mejor para imprimir",
+            font=ctk.CTkFont(size=11),
+            text_color="gray60",
+            anchor="w",
+        )
+        self.layout_hint_lbl.pack(side="left", fill="x", expand=True, padx=(0, 10))
+
+        self.color_swatch_btn = ctk.CTkButton(
+            format_row,
+            text="",
+            width=28,
+            height=28,
+            corner_radius=6,
+            border_width=1,
+            border_color="gray50",
+            fg_color=self.settings.chord_color,
+            hover_color=self.settings.chord_color,
+            command=self.pick_chord_color,
+        )
+        self.color_swatch_btn.pack(side="right", padx=(6, 0))
+
+        color_lbl = ctk.CTkLabel(format_row, text="Color acordes:", font=ctk.CTkFont(size=12))
+        color_lbl.pack(side="right", padx=(0, 0))
+
         # Progress bar
         self.progress_bar = ctk.CTkProgressBar(bottom_frame)
-        self.progress_bar.grid(row=1, column=0, columnspan=3, padx=15, pady=(8, 4), sticky="ew")
+        self.progress_bar.grid(row=2, column=0, columnspan=3, padx=15, pady=(8, 4), sticky="ew")
         self.progress_bar.set(0)
 
         # Status & Generate button row
         action_row = ctk.CTkFrame(bottom_frame, fg_color="transparent")
-        action_row.grid(row=2, column=0, columnspan=3, padx=15, pady=(5, 12), sticky="ew")
+        action_row.grid(row=3, column=0, columnspan=3, padx=15, pady=(5, 12), sticky="ew")
         action_row.grid_columnconfigure(0, weight=1)
 
         self.status_lbl = ctk.CTkLabel(
@@ -575,6 +621,32 @@ class RepertoireApp(ctk.CTk):
             self.output_entry.delete(0, "end")
             self.output_entry.insert(0, path)
 
+    # --- Format & Settings Controls ---
+    def _on_layout_changed(self, value: str) -> None:
+        cols = 1 if "1" in str(value) else 2
+        self.settings.update(columns=cols)
+
+    def set_layout(self, columns: int) -> None:
+        self.settings.update(columns=columns)
+        val_str = "1 Columna" if self.settings.columns == 1 else "2 Columnas"
+        self.layout_segmented_btn.set(val_str)
+
+    def pick_chord_color(self) -> None:
+        result = colorchooser.askcolor(
+            color=self.settings.chord_color,
+            title="Elegir color de acordes",
+            parent=self,
+        )
+        if result and result[1]:
+            self.update_chord_color(result[1])
+
+    def update_chord_color(self, hex_color: str) -> None:
+        self.settings.update(chord_color=hex_color)
+        self.color_swatch_btn.configure(
+            fg_color=self.settings.chord_color,
+            hover_color=self.settings.chord_color,
+        )
+
     # --- Generation Logic ---
     def start_generation(self) -> None:
         if self.is_generating:
@@ -591,19 +663,29 @@ class RepertoireApp(ctk.CTk):
 
         self.is_generating = True
         self.generate_btn.configure(state="disabled", text="Generando...")
+        self.layout_segmented_btn.configure(state="disabled")
+        self.color_swatch_btn.configure(state="disabled")
         self.open_doc_btn.grid_remove()
         self.open_folder_btn.grid_remove()
         self.progress_bar.set(0)
         self.status_lbl.configure(text="Iniciando generación...")
 
         songs_copy = list(self.setlist.songs)
+        cols = self.settings.columns
+        chord_color = self.settings.chord_color
         threading.Thread(
             target=self._generation_worker,
-            args=(songs_copy, out_path),
+            args=(songs_copy, out_path, cols, chord_color),
             daemon=True,
         ).start()
 
-    def _generation_worker(self, songs: List[Dict[str, Any]], out_path: str) -> None:
+    def _generation_worker(
+        self,
+        songs: List[Dict[str, Any]],
+        out_path: str,
+        columns: int = 2,
+        chord_color: Optional[str] = None,
+    ) -> None:
         def update_progress(current: int, total: int, message: str) -> None:
             pct = current / max(total, 1)
             self.after(0, lambda: self._update_progress_ui(pct, message))
@@ -613,6 +695,8 @@ class RepertoireApp(ctk.CTk):
                 songs,
                 output_docx=out_path,
                 progress_callback=update_progress,
+                columns=columns,
+                chord_color=chord_color,
             )
             self.after(0, lambda: self._on_generation_success(stats, out_path))
         except Exception as exc:
@@ -625,6 +709,8 @@ class RepertoireApp(ctk.CTk):
     def _on_generation_success(self, stats: Dict[str, int], out_path: str) -> None:
         self.is_generating = False
         self.generate_btn.configure(state="normal", text="Generar Repertorio (.docx)")
+        self.layout_segmented_btn.configure(state="normal")
+        self.color_swatch_btn.configure(state="normal")
         self.progress_bar.set(1.0)
         self.last_generated_file = out_path
 
@@ -640,6 +726,8 @@ class RepertoireApp(ctk.CTk):
     def _on_generation_error(self, error_msg: str) -> None:
         self.is_generating = False
         self.generate_btn.configure(state="normal", text="Generar Repertorio (.docx)")
+        self.layout_segmented_btn.configure(state="normal")
+        self.color_swatch_btn.configure(state="normal")
         self.status_lbl.configure(text=f"Error durante la generación.")
         messagebox.showerror("Error al generar", f"Ocurrió un error inesperado:\n{error_msg}")
 

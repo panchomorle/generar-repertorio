@@ -1,6 +1,6 @@
 # Spec: Configurable Repertoire Layout and Chord Color
 
-Status: ready-for-agent
+Status: done
 
 ## Problem Statement
 

@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Loading settings when `.cache_cifras/settings.json` does not exist creates or returns default values (2 columns, `#E65100`).
 - [x] Saving settings persists the chosen column count (1 or 2) and chord color hex string cleanly to disk.

@@ -4,7 +4,7 @@
 
 **Blocked by:** None (can start immediately).
 
-**Status:** ready-for-agent
+**Status:** done
 
 - [x] Generating a Repertoire with 1 column produces a Word document with a single-column section (`w:cols num="1"`).
 - [x] In 1-column documents, chord and lyrics text automatically adopts the 10.5 pt font size preset with 13 pt line spacing.
