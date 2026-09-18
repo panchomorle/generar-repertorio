@@ -13,6 +13,7 @@ from repertorio.generator import generate_from_songs
 from repertorio.cache import CacheManager
 from repertorio.scraper import fetch_and_parse_song
 from repertorio.transposer import transpose_key
+from repertorio.ui.editor import SongEditModal
 
 
 ctk.set_appearance_mode("System")
@@ -360,6 +361,14 @@ class RepertoireApp(ctk.CTk):
             row.pack(fill="x", padx=5, pady=3)
             row.grid_columnconfigure(1, weight=1)
 
+            # Interactive row click handler to open editor
+            def on_row_click(event=None, i=idx):
+                self.open_song_editor(i)
+
+            row.bind("<Button-1>", on_row_click)
+            row.bind("<Enter>", lambda e, r=row: r.configure(fg_color="gray26"))
+            row.bind("<Leave>", lambda e, r=row: r.configure(fg_color="gray22"))
+
             # Number badge
             num_lbl = ctk.CTkLabel(
                 row,
@@ -367,18 +376,37 @@ class RepertoireApp(ctk.CTk):
                 width=30,
                 font=ctk.CTkFont(size=13, weight="bold"),
                 text_color="gray70",
+                cursor="hand2",
             )
             num_lbl.grid(row=0, column=0, padx=(10, 5), pady=8)
+            num_lbl.bind("<Button-1>", on_row_click)
 
-            # Title & Artist
+            # Title, Artist & Override Badge Frame
+            title_frame = ctk.CTkFrame(row, fg_color="transparent", cursor="hand2")
+            title_frame.grid(row=0, column=1, padx=5, pady=8, sticky="w")
+            title_frame.bind("<Button-1>", on_row_click)
+
             title_text = f"{song.get('title')} — {song.get('artist')}"
             title_lbl = ctk.CTkLabel(
-                row,
+                title_frame,
                 text=title_text,
                 anchor="w",
                 font=ctk.CTkFont(size=13, weight="bold"),
+                cursor="hand2",
             )
-            title_lbl.grid(row=0, column=1, padx=5, pady=8, sticky="w")
+            title_lbl.pack(side="left", padx=(0, 8))
+            title_lbl.bind("<Button-1>", on_row_click)
+
+            if self.setlist.is_song_modified(idx):
+                badge_lbl = ctk.CTkLabel(
+                    title_frame,
+                    text="[✏️ Editada]",
+                    font=ctk.CTkFont(size=11, weight="bold"),
+                    text_color="#FFA726",
+                    cursor="hand2",
+                )
+                badge_lbl.pack(side="left")
+                badge_lbl.bind("<Button-1>", on_row_click)
 
             # Transposition & Key controls
             trans_frame = ctk.CTkFrame(row, fg_color="transparent")
@@ -437,9 +465,20 @@ class RepertoireApp(ctk.CTk):
             )
             plus_btn.pack(side="left", padx=(2, 4))
 
-            # Actions: Up, Down, Remove
+            # Actions: Edit, Up, Down, Remove
             ctrls = ctk.CTkFrame(row, fg_color="transparent")
             ctrls.grid(row=0, column=3, padx=(5, 10), pady=4)
+
+            edit_btn = ctk.CTkButton(
+                ctrls,
+                text="✏️",
+                width=32,
+                height=26,
+                fg_color="gray30",
+                hover_color="gray40",
+                command=lambda i=idx: self.open_song_editor(i),
+            )
+            edit_btn.pack(side="left", padx=2)
 
             up_btn = ctk.CTkButton(
                 ctrls,
@@ -471,6 +510,19 @@ class RepertoireApp(ctk.CTk):
                 command=lambda i=idx: self.remove_song(i),
             )
             del_btn.pack(side="left", padx=(4, 0))
+
+    def open_song_editor(self, index: int) -> None:
+        """Open modal editor dialog for song at index."""
+        if not (0 <= index < len(self.setlist.songs)):
+            return
+        SongEditModal(
+            parent=self,
+            setlist=self.setlist,
+            song_index=index,
+            cache=self.cache,
+            on_save=self.render_setlist,
+            on_restore=self.render_setlist,
+        )
 
     def move_up(self, index: int) -> None:
         if self.setlist.move_up(index):
