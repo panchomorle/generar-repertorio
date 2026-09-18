@@ -25,16 +25,94 @@ class Setlist:
             if f"{existing.get('dns')}_{existing.get('url')}" == slug:
                 return False
 
-        self.songs.append({
+        song_entry = {
             "artist": song["artist"],
             "title": song["title"],
             "dns": song["dns"],
             "url": song["url"],
             "key": song.get("key"),
             "semitones": int(song.get("semitones", 0)),
-        })
+        }
+        if "override" in song and song["override"] is not None:
+            song_entry["override"] = song["override"]
+
+        self.songs.append(song_entry)
         self.save_autosave()
         return True
+
+    def set_song_override(
+        self, index: int, override_lines: List[List[Dict[str, Any]]] | str
+    ) -> bool:
+        """Set a custom chord sheet override for a song at index. Returns True if set."""
+        if 0 <= index < len(self.songs):
+            if isinstance(override_lines, str):
+                from repertorio.parser import parse_text_to_lines
+                lines = parse_text_to_lines(override_lines)
+            else:
+                lines = override_lines
+
+            self.songs[index]["override"] = {
+                "lines": lines,
+                "is_modified": True,
+            }
+            self.save_autosave()
+            return True
+        return False
+
+    def clear_song_override(self, index: int) -> bool:
+        """Clear song override at index, reverting to unedited state. Returns True if cleared."""
+        if 0 <= index < len(self.songs):
+            if "override" in self.songs[index]:
+                self.songs[index].pop("override", None)
+                self.save_autosave()
+                return True
+        return False
+
+    def has_song_override(self, index: int) -> bool:
+        """Return True if song at index has an active override."""
+        if 0 <= index < len(self.songs):
+            override = self.songs[index].get("override")
+            if isinstance(override, dict):
+                return bool(override.get("is_modified") and override.get("lines") is not None)
+        return False
+
+    def is_song_modified(self, index: int) -> bool:
+        """Check if the song at index has been modified with an override."""
+        return self.has_song_override(index)
+
+    def get_song_override(self, index: int) -> Optional[Dict[str, Any]]:
+        """Return the override payload for a song at index, or None."""
+        if 0 <= index < len(self.songs):
+            return self.songs[index].get("override")
+        return None
+
+    def get_song_lines(
+        self,
+        index: int,
+        cache: Optional[Any] = None,
+        cache_dir: Path | str = ".cache_cifras",
+    ) -> Optional[List[List[Dict[str, Any]]]]:
+        """Return the lines for a song at index, prioritizing override over cache."""
+        if not (0 <= index < len(self.songs)):
+            return None
+
+        song = self.songs[index]
+        override = song.get("override")
+        if isinstance(override, dict) and override.get("lines") is not None:
+            return override["lines"]
+
+        dns = song.get("dns", "")
+        url = song.get("url", "")
+        slug = f"{dns}_{url}"
+        if slug != "_":
+            if cache is None:
+                from repertorio.cache import CacheManager
+                cache = CacheManager(cache_dir)
+            cached_song = cache.get_by_slug(slug)
+            if cached_song and "lines" in cached_song:
+                return cached_song["lines"]
+
+        return None
 
     def set_song_key(self, index: int, key: Optional[str]) -> bool:
         """Set the key for a song at index. Returns True if updated."""

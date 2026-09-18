@@ -4,12 +4,20 @@
 
 **Blocked by:** 01: Harmonic Text Parser and Tokenizer
 
-**Status:** ready-for-agent
+**Status:** resolved
 
-- [ ] A Setlist entry can store an override payload containing custom chord lines and an edit flag.
-- [ ] Setting an override on a song marks it as modified, and clearing the override reverts the song to its unedited state.
-- [ ] Song overrides persist across sessions via the setlist autosave file (`setlist.json`) and survive export/import operations.
-- [ ] Reordering songs (move up/down) or adding new songs to the setlist preserves existing overrides without corruption.
-- [ ] During repertoire compilation, `generate_from_songs` detects the song override and uses its custom lines instead of loading from the global cache or scraper.
-- [ ] Transposition applied to a song with an override properly shifts all chords in the override and displays the correct key and original reference in the document header.
-- [ ] Integration tests verify override persistence and document generation with custom chords.
+- [x] A Setlist entry can store an override payload containing custom chord lines and an edit flag.
+- [x] Setting an override on a song marks it as modified, and clearing the override reverts the song to its unedited state.
+- [x] Song overrides persist across sessions via the setlist autosave file (`setlist.json`) and survive export/import operations.
+- [x] Reordering songs (move up/down) or adding new songs to the setlist preserves existing overrides without corruption.
+- [x] During repertoire compilation, `generate_from_songs` detects the song override and uses its custom lines instead of loading from the global cache or scraper.
+- [x] Transposition applied to a song with an override properly shifts all chords in the override and displays the correct key and original reference in the document header.
+- [x] Integration tests verify override persistence and document generation with custom chords.
+
+## Comments
+
+- Added `set_song_override`, `clear_song_override`, `has_song_override`, `is_song_modified`, `get_song_override`, and `get_song_lines` methods to `Setlist` (`src/repertorio/setlist.py`).
+- Updated `add_song` to preserve song override payloads across additions, autosave, and export/import cycles.
+- Integrated override prioritization into `generate_from_songs` (`src/repertorio/generator.py`), bypassing scraping and keeping `.cache_cifras/` cache immutable while applying active transposition and formatting in Word compilation.
+- Added comprehensive unit and integration tests in `tests/test_setlist.py` and `tests/test_generator.py`.
+

@@ -31,6 +31,33 @@ def generate_from_songs(
         if progress_callback:
             progress_callback(i, total, f"Procesando: {title} - {artist}...")
 
+        # 0. Check for song override
+        override = song.get("override")
+        if override and override.get("lines") is not None and override.get("is_modified", True):
+            song_data = {
+                "title": title,
+                "artist": artist,
+                "dns": dns,
+                "url": url,
+                "key": song.get("key"),
+                "semitones": int(song.get("semitones", 0)),
+                "lines": override["lines"],
+                "capo": song.get("capo", "N/A"),
+                "is_override": True,
+            }
+            # Enrich key and capo from local cache if available and not present in song
+            if slug_key != "_":
+                cached_data = cache.get_by_slug(slug_key)
+                if cached_data:
+                    if not song_data.get("key") and cached_data.get("key"):
+                        song_data["key"] = cached_data["key"]
+                    if song_data.get("capo") == "N/A" and cached_data.get("capo"):
+                        song_data["capo"] = cached_data["capo"]
+
+            resolved_songs.append(song_data)
+            cached += 1
+            continue
+
         # 1. Check cache by canonical slug
         song_data = cache.get_by_slug(slug_key) if slug_key != "_" else None
         if song_data:
