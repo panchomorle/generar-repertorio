@@ -34,7 +34,7 @@ jobs:
 
       - name: Build Windows .exe with PyInstaller
         run: |
-          pyinstaller --noconsole --onefile --name "GeneradorRepertorio" --collect-all customtkinter --hidden-import docx --hidden-import bs4 main.py
+          pyinstaller --noconsole --onefile --paths src --name "GeneradorRepertorio" --collect-all customtkinter --hidden-import docx --hidden-import bs4 main.py
 
       - name: Verify executable exists
         run: |

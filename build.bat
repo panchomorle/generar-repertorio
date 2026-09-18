@@ -6,7 +6,7 @@ echo =======================================================
 python -m pip install -r requirements.txt
 python -m pip install -r requirements-dev.txt
 
-pyinstaller --noconsole --onefile --name "GeneradorRepertorio" --collect-all customtkinter --hidden-import docx --hidden-import bs4 main.py
+pyinstaller --noconsole --onefile --paths src --name "GeneradorRepertorio" --collect-all customtkinter --hidden-import docx --hidden-import bs4 main.py
 
 if %ERRORLEVEL% EQU 0 (
     echo.
