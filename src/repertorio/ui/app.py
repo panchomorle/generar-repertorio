@@ -10,6 +10,9 @@ from tkinter import filedialog, messagebox
 from repertorio.search import search_songs
 from repertorio.setlist import Setlist
 from repertorio.generator import generate_from_songs
+from repertorio.cache import CacheManager
+from repertorio.scraper import fetch_and_parse_song
+from repertorio.transposer import transpose_key
 
 
 ctk.set_appearance_mode("System")
@@ -27,12 +30,14 @@ class RepertoireApp(ctk.CTk):
         self.minsize(800, 600)
 
         self.setlist = Setlist()
+        self.cache = CacheManager()
         self.search_results: List[Dict[str, Any]] = []
         self.is_generating = False
         self.last_generated_file: Optional[str] = None
 
         self._setup_ui()
         self.render_setlist()
+        self._resolve_missing_keys_in_background()
 
     def _setup_ui(self) -> None:
         self.grid_columnconfigure(0, weight=1)
@@ -260,10 +265,76 @@ class RepertoireApp(ctk.CTk):
         self.results_frame.grid(row=2, column=0, columnspan=2, padx=15, pady=(0, 12), sticky="ew")
 
     def add_to_setlist(self, song: Dict[str, Any]) -> None:
+        dns = song.get("dns", "")
+        url = song.get("url", "")
+        slug_key = f"{dns}_{url}"
+
+        # Pre-populate key from cache if available
+        cached = self.cache.get_by_slug(slug_key) if slug_key != "_" else None
+        if cached and cached.get("key"):
+            song["key"] = cached["key"]
+
         added = self.setlist.add_song(song)
         if not added:
             messagebox.showinfo("Información", f"'{song.get('title')}' ya está en el repertorio.")
             return
+        self.render_setlist()
+
+        # If key is not yet resolved, fetch in background
+        if not song.get("key") and dns and url:
+            threading.Thread(
+                target=self._fetch_song_key_worker,
+                args=(dns, url, song.get("artist", ""), song.get("title", "")),
+                daemon=True,
+            ).start()
+
+    def _fetch_song_key_worker(self, dns: str, url: str, artist: str, title: str) -> None:
+        try:
+            fetched = fetch_and_parse_song(dns, url, artist=artist, title=title)
+            if fetched:
+                slug = f"{dns}_{url}"
+                self.cache.save(slug, fetched)
+                key = fetched.get("key")
+                if key:
+                    for idx, s in enumerate(self.setlist.songs):
+                        if f"{s.get('dns')}_{s.get('url')}" == slug:
+                            self.setlist.set_song_key(idx, key)
+                            self.after(0, self.render_setlist)
+                            break
+        except Exception as exc:
+            print(f"[WARN] Error fetching key for {dns}/{url}: {exc}")
+
+    def _resolve_missing_keys_in_background(self) -> None:
+        """Resolve keys for songs in the setlist that don't have a key yet."""
+        def worker():
+            updated = False
+            for s in list(self.setlist.songs):
+                if not s.get("key"):
+                    dns = s.get("dns", "")
+                    url = s.get("url", "")
+                    slug = f"{dns}_{url}"
+                    cached = self.cache.get_by_slug(slug) if slug != "_" else None
+                    if cached and cached.get("key"):
+                        s["key"] = cached["key"]
+                        updated = True
+                    elif dns and url:
+                        try:
+                            fetched = fetch_and_parse_song(dns, url, artist=s.get("artist", ""), title=s.get("title", ""))
+                            if fetched:
+                                self.cache.save(slug, fetched)
+                                if fetched.get("key"):
+                                    s["key"] = fetched["key"]
+                                    updated = True
+                        except Exception:
+                            pass
+            if updated:
+                self.setlist.save_autosave()
+                self.after(0, self.render_setlist)
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def adjust_transposition(self, index: int, delta: int) -> None:
+        self.setlist.transpose_song(index, delta)
         self.render_setlist()
 
     # --- Setlist Management ---
@@ -309,9 +380,66 @@ class RepertoireApp(ctk.CTk):
             )
             title_lbl.grid(row=0, column=1, padx=5, pady=8, sticky="w")
 
+            # Transposition & Key controls
+            trans_frame = ctk.CTkFrame(row, fg_color="transparent")
+            trans_frame.grid(row=0, column=2, padx=(5, 10), pady=4)
+
+            semitones = int(song.get("semitones", 0))
+            key = song.get("key")
+            if key:
+                if semitones != 0:
+                    transposed_key = transpose_key(key, semitones)
+                    sign = f"+{semitones}" if semitones > 0 else str(semitones)
+                    tone_text = f"Tono: {transposed_key} ({sign})"
+                    tone_color = "#FFA726"
+                else:
+                    tone_text = f"Tono: {key}"
+                    tone_color = "gray80"
+            elif semitones != 0:
+                sign = f"+{semitones}" if semitones > 0 else str(semitones)
+                tone_text = f"Tono: ({sign})"
+                tone_color = "#FFA726"
+            else:
+                tone_text = "Tono: ..."
+                tone_color = "gray50"
+
+            tone_lbl = ctk.CTkLabel(
+                trans_frame,
+                text=tone_text,
+                font=ctk.CTkFont(size=12, weight="bold"),
+                text_color=tone_color,
+                width=110,
+                anchor="e",
+            )
+            tone_lbl.pack(side="left", padx=(0, 6))
+
+            minus_btn = ctk.CTkButton(
+                trans_frame,
+                text="-",
+                width=28,
+                height=26,
+                fg_color="gray30",
+                hover_color="gray40",
+                font=ctk.CTkFont(size=14, weight="bold"),
+                command=lambda i=idx: self.adjust_transposition(i, -1),
+            )
+            minus_btn.pack(side="left", padx=2)
+
+            plus_btn = ctk.CTkButton(
+                trans_frame,
+                text="+",
+                width=28,
+                height=26,
+                fg_color="gray30",
+                hover_color="gray40",
+                font=ctk.CTkFont(size=14, weight="bold"),
+                command=lambda i=idx: self.adjust_transposition(i, 1),
+            )
+            plus_btn.pack(side="left", padx=(2, 4))
+
             # Actions: Up, Down, Remove
             ctrls = ctk.CTkFrame(row, fg_color="transparent")
-            ctrls.grid(row=0, column=2, padx=(5, 10), pady=4)
+            ctrls.grid(row=0, column=3, padx=(5, 10), pady=4)
 
             up_btn = ctk.CTkButton(
                 ctrls,

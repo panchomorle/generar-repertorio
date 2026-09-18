@@ -171,3 +171,50 @@ def test_generate_from_songs(temp_workspace):
         assert stats["failed"] == 0
         assert len(progress_calls) >= 2
         assert output_docx.exists()
+
+
+def test_generate_from_songs_with_transposition(temp_workspace):
+    from repertorio.generator import generate_from_songs
+
+    output_docx = temp_workspace["output_docx"]
+    cache_dir = temp_workspace["cache_dir"]
+    songs = [
+        {
+            "artist": "Soda Stereo",
+            "title": "De Música Ligera",
+            "dns": "soda-stereo",
+            "url": "de-musica-ligera",
+            "key": "Bm",
+            "semitones": 2,
+        }
+    ]
+
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_page_resp = MagicMock()
+        mock_page_resp.read.return_value = MOCK_HTML_PAGE.encode("utf-8")
+        mock_page_resp.__enter__.return_value = mock_page_resp
+        mock_urlopen.return_value = mock_page_resp
+
+        stats = generate_from_songs(songs, output_docx, cache_dir=cache_dir)
+        assert stats["total"] == 1
+        assert stats["downloaded"] == 1
+
+        doc = docx.Document(output_docx)
+        all_text = "\n".join([p.text for p in doc.paragraphs])
+        # Transposed key with original reference
+        assert "Tono: C#m (Original: Bm)" in all_text
+
+        # Transposed chords: Bm (+2) -> C#m, G (+2) -> A, D (+2) -> E, A (+2) -> B
+        chord_runs = []
+        for p in doc.paragraphs:
+            for r in p.runs:
+                if r.bold and r.font.color and r.font.color.rgb == RGBColor(230, 81, 0):
+                    chord_runs.append(r.text)
+
+        assert "C#m" in chord_runs
+        assert "A" in chord_runs
+        assert "E" in chord_runs
+        assert "B" in chord_runs
+        # Original chords should not be present
+        assert "Bm" not in chord_runs
+

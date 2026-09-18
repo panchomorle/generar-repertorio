@@ -30,9 +30,29 @@ class Setlist:
             "title": song["title"],
             "dns": song["dns"],
             "url": song["url"],
+            "key": song.get("key"),
+            "semitones": int(song.get("semitones", 0)),
         })
         self.save_autosave()
         return True
+
+    def set_song_key(self, index: int, key: Optional[str]) -> bool:
+        """Set the key for a song at index. Returns True if updated."""
+        if 0 <= index < len(self.songs):
+            self.songs[index]["key"] = key
+            self.save_autosave()
+            return True
+        return False
+
+    def transpose_song(self, index: int, semitones_delta: int) -> Optional[int]:
+        """Adjust song transposition by semitones_delta. Returns new semitones value or None."""
+        if 0 <= index < len(self.songs):
+            current = int(self.songs[index].get("semitones", 0))
+            new_val = current + semitones_delta
+            self.songs[index]["semitones"] = new_val
+            self.save_autosave()
+            return new_val
+        return None
 
     def remove_song(self, index: int) -> Optional[Dict[str, Any]]:
         """Remove song at index. Returns removed song or None."""

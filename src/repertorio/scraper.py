@@ -1,3 +1,4 @@
+import re
 import urllib.request
 from typing import Dict, Any, Optional, List
 from bs4 import BeautifulSoup, NavigableString, Tag
@@ -52,9 +53,26 @@ def fetch_and_parse_song(dns: str, url: str, artist: str = "", title: str = "", 
 
         soup = BeautifulSoup(html, "html.parser")
 
-        # Key (Tom) and Capo
-        key_elem = soup.find(id="cifra_tom") or soup.find("span", id="cifra_tom")
-        key = key_elem.get_text(strip=True) if key_elem else None
+        # Key (Tom) extraction: support modern CifraClub markup and legacy fallback
+        key = None
+        btn_tone = soup.find("button", attrs={"data-anchor": "--chord-tone"})
+        if btn_tone:
+            key = btn_tone.get_text(strip=True)
+
+        if not key:
+            for span in soup.find_all(string=re.compile(r"^Tom\b", re.I)):
+                parent = span.parent
+                if parent:
+                    btn = parent.find_next("button") or (parent.parent.find("button") if parent.parent else None)
+                    if btn:
+                        candidate = btn.get_text(strip=True)
+                        if candidate and len(candidate) <= 6:
+                            key = candidate
+                            break
+
+        if not key:
+            key_elem = soup.find(id="cifra_tom") or soup.find("span", id="cifra_tom") or soup.find(attrs={"data-tom": True})
+            key = key_elem.get_text(strip=True) if key_elem else None
 
         capo_elem = soup.find(id="cifra_capo") or soup.find("span", id="cifra_capo")
         capo = capo_elem.get_text(strip=True) if capo_elem else None

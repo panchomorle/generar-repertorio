@@ -34,6 +34,10 @@ def generate_from_songs(
         # 1. Check cache by canonical slug
         song_data = cache.get_by_slug(slug_key) if slug_key != "_" else None
         if song_data:
+            song_data = dict(song_data)
+            song_data["semitones"] = int(song.get("semitones", 0))
+            if song.get("key") and not song_data.get("key"):
+                song_data["key"] = song["key"]
             resolved_songs.append(song_data)
             cached += 1
             continue
@@ -43,6 +47,10 @@ def generate_from_songs(
             song_data = fetch_and_parse_song(dns, url, artist=artist, title=title)
             if song_data:
                 cache.save(slug_key, song_data)
+                song_data = dict(song_data)
+                song_data["semitones"] = int(song.get("semitones", 0))
+                if song.get("key") and not song_data.get("key"):
+                    song_data["key"] = song["key"]
                 resolved_songs.append(song_data)
                 downloaded += 1
                 continue

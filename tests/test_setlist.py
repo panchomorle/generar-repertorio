@@ -31,11 +31,23 @@ def test_setlist_operations(tmp_path: Path):
     assert s.move_up(1) is True
     assert s.songs[0]["title"] == "De Musica Ligera"
 
+    # Transposition and key
+    assert s.songs[0]["key"] is None
+    assert s.songs[0]["semitones"] == 0
+    assert s.set_song_key(0, "Bm") is True
+    assert s.songs[0]["key"] == "Bm"
+    assert s.transpose_song(0, 2) == 2
+    assert s.songs[0]["semitones"] == 2
+    assert s.transpose_song(0, -1) == 1
+    assert s.songs[0]["semitones"] == 1
+
     # Persistence verification
     assert cache_file.exists()
     s2 = Setlist(persistence_path=cache_file)
     assert len(s2.songs) == 2
     assert s2.songs[0]["title"] == "De Musica Ligera"
+    assert s2.songs[0]["key"] == "Bm"
+    assert s2.songs[0]["semitones"] == 1
 
     # Export / Import
     export_file = tmp_path / "custom_export.json"
@@ -46,6 +58,8 @@ def test_setlist_operations(tmp_path: Path):
     added = s3.import_from_file(export_file)
     assert added == 2
     assert len(s3.songs) == 2
+    assert s3.songs[0]["key"] == "Bm"
+    assert s3.songs[0]["semitones"] == 1
 
     # Remove song
     removed = s.remove_song(0)

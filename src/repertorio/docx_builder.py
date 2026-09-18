@@ -7,6 +7,8 @@ from docx.enum.section import WD_SECTION
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 
+from repertorio.transposer import transpose_key, transpose_lines
+
 
 FONT_NAME = "Consolas"
 CHORD_COLOR = RGBColor(230, 81, 0)  # Vibrant orange
@@ -57,10 +59,21 @@ def build_document(songs: List[Dict[str, Any]], output_path: Path | str) -> None
         r_title.font.size = Pt(12)
         r_title.font.color.rgb = HEADER_COLOR
 
+        semitones = int(song.get("semitones", 0))
+        base_key = song.get("key")
+
         # Optional Key (Tom) and Capo metadata line
         meta_items = []
-        if song.get("key"):
-            meta_items.append(f"Tono: {song['key']}")
+        if base_key:
+            if semitones != 0:
+                transposed_key = transpose_key(base_key, semitones)
+                meta_items.append(f"Tono: {transposed_key} (Original: {base_key})")
+            else:
+                meta_items.append(f"Tono: {base_key}")
+        elif semitones != 0:
+            sign = f"+{semitones}" if semitones > 0 else str(semitones)
+            meta_items.append(f"Tono: Transpuesto ({sign})")
+
         if song.get("capo") and song["capo"] != "N/A":
             meta_items.append(f"Capo: {song['capo']}")
 
@@ -75,7 +88,8 @@ def build_document(songs: List[Dict[str, Any]], output_path: Path | str) -> None
             r_meta.font.color.rgb = META_COLOR
 
         # Render song lines (chords & lyrics)
-        lines = song.get("lines", [])
+        raw_lines = song.get("lines", [])
+        lines = transpose_lines(raw_lines, semitones) if semitones != 0 else raw_lines
         for line_tokens in lines:
             line_text = "".join(t["text"] for t in line_tokens)
 

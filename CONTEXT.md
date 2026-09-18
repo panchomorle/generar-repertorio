@@ -9,8 +9,12 @@ The ordered, persistent collection of curated songs saved locally and used to co
 _Avoid_: playlist, queue, txt list
 
 **Song**:
-A chord sheet entity resolved from CifraClub, containing artist, title, dns, and url path.
+A chord sheet entity resolved from CifraClub, containing artist, title, dns, url path, detected key, and semitone transposition offset.
 _Avoid_: track, cifra, tema
+
+**Transposition**:
+The semitone offset applied to a Song's chords and key when compiling the Repertoire.
+_Avoid_: cambio de tono, pitch shift
 
 **Repertoire**:
 The final compiled Word (.docx) document containing formatted two-column chord sheets and page breaks for each song in the setlist.
