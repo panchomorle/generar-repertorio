@@ -144,3 +144,30 @@ def test_generator_end_to_end(temp_workspace):
         assert stats_2["cached"] == 1
         assert stats_2["failed"] == 0
         assert mock_urlopen_2.call_count == 0
+
+
+def test_generate_from_songs(temp_workspace):
+    from repertorio.generator import generate_from_songs
+
+    output_docx = temp_workspace["output_docx"]
+    cache_dir = temp_workspace["cache_dir"]
+    songs = [
+        {"artist": "Soda Stereo", "title": "De Música Ligera", "dns": "soda-stereo", "url": "de-musica-ligera"}
+    ]
+
+    with patch("urllib.request.urlopen") as mock_urlopen:
+        mock_page_resp = MagicMock()
+        mock_page_resp.read.return_value = MOCK_HTML_PAGE.encode("utf-8")
+        mock_page_resp.__enter__.return_value = mock_page_resp
+        mock_urlopen.return_value = mock_page_resp
+
+        progress_calls = []
+        def on_progress(cur, tot, msg):
+            progress_calls.append((cur, tot, msg))
+
+        stats = generate_from_songs(songs, output_docx, cache_dir=cache_dir, progress_callback=on_progress)
+        assert stats["total"] == 1
+        assert stats["downloaded"] == 1
+        assert stats["failed"] == 0
+        assert len(progress_calls) >= 2
+        assert output_docx.exists()

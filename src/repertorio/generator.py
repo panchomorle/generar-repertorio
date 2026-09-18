@@ -1,10 +1,66 @@
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional, Callable
 
 from repertorio.search import search_song
 from repertorio.scraper import fetch_and_parse_song
 from repertorio.cache import CacheManager
 from repertorio.docx_builder import build_document
+
+
+def generate_from_songs(
+    songs: List[Dict[str, Any]],
+    output_docx: Path | str,
+    cache_dir: Path | str = ".cache_cifras",
+    progress_callback: Optional[Callable[[int, int, str], None]] = None,
+) -> Dict[str, int]:
+    """Generate Word repertoire docx directly from a list of curated song dicts."""
+    cache = CacheManager(cache_dir)
+    resolved_songs: List[Dict[str, Any]] = []
+    downloaded = 0
+    cached = 0
+    failed = 0
+    total = len(songs)
+
+    for i, song in enumerate(songs):
+        title = song.get("title", "Cancion")
+        artist = song.get("artist", "Artista")
+        dns = song.get("dns", "")
+        url = song.get("url", "")
+        slug_key = f"{dns}_{url}"
+
+        if progress_callback:
+            progress_callback(i, total, f"Procesando: {title} - {artist}...")
+
+        # 1. Check cache by canonical slug
+        song_data = cache.get_by_slug(slug_key) if slug_key != "_" else None
+        if song_data:
+            resolved_songs.append(song_data)
+            cached += 1
+            continue
+
+        # 2. Fetch and parse if not cached
+        if dns and url:
+            song_data = fetch_and_parse_song(dns, url, artist=artist, title=title)
+            if song_data:
+                cache.save(slug_key, song_data)
+                resolved_songs.append(song_data)
+                downloaded += 1
+                continue
+
+        failed += 1
+
+    if progress_callback:
+        progress_callback(total, total, f"Compilando documento Word: {output_docx}...")
+
+    if resolved_songs:
+        build_document(resolved_songs, output_docx)
+
+    return {
+        "total": total,
+        "downloaded": downloaded,
+        "cached": cached,
+        "failed": failed,
+    }
 
 
 def read_song_queries(songs_file: Path | str) -> List[str]:

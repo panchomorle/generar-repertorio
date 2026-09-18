@@ -11,3 +11,6 @@ htmlcov/
 env/
 ENV/
 .DS_Store
+dist/
+build/
+*.spec
